@@ -1,3 +1,6 @@
+import time
+from typing import Callable
+
 import uvicorn
 from fastapi import FastAPI, APIRouter, BackgroundTasks, HTTPException, Request, status
 from fastapi.exceptions import RequestValidationError
@@ -22,6 +25,15 @@ async def lifespan(app: FastAPI):
 router = APIRouter(prefix="/books", tags=["Books"])
 
 app = FastAPI(lifespan=lifespan)
+
+
+@app.middleware("http")
+async def request_time(request: Request, call_next):
+    start = time.time()
+    response = await call_next(request)
+    finish = time.time()
+    response.headers["X-REQUEST-TIME"] = str(finish - start)
+    return response
 
 
 @app.exception_handler(RequestValidationError)
