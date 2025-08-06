@@ -1,5 +1,5 @@
 from sqlalchemy import CheckConstraint
-from Connection import Base
+from DataBase.Connection import Base
 from sqlalchemy.orm import Mapped, mapped_column
 
 

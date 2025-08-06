@@ -1,5 +1,5 @@
 from pydantic import BaseModel
-from Parameters import host, port, user, password, db_name
+from DataBase.Parameters import host, port, user, password, db_name
 
 
 class Settings(BaseModel):

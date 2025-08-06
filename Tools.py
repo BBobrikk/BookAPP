@@ -1,9 +1,7 @@
-import asyncio
-from time import sleep
 from typing import Annotated
 from fastapi.params import Depends
 from sqlalchemy.ext.asyncio import AsyncSession
-from Connection import session, engine, Base
+from DataBase.Connection import session, engine, Base
 
 
 async def setup_db():
@@ -19,4 +17,3 @@ async def get_session():
 
 
 SessionDep = Annotated[AsyncSession, Depends(get_session)]
-Cred = Depends()

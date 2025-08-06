@@ -1,6 +1,6 @@
-from Connection import Base, engine
-from Connection import session
-from TableModels import BooksORM
+from DataBase.Connection import Base, engine
+from DataBase.Connection import session
+from DataBase.TableModels import BooksORM
 import pytest
 
 
