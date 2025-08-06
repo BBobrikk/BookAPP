@@ -1,17 +1,17 @@
 import time
-from typing import Callable
+from http.client import responses
 
 import uvicorn
 from fastapi import FastAPI, APIRouter, BackgroundTasks, HTTPException, Request, status
 from fastapi.exceptions import RequestValidationError
 from fastapi.responses import JSONResponse
-from httpx import Request
 from sqlalchemy import select
-
-from ObjectModels import BookModel
-from TableModels import BooksORM
+from sqlalchemy.exc import IntegrityError
+from ObjectModels import BookModel, CredModel
+from TableModels import BooksORM, CredsORM
 from Tools import *
 from contextlib import asynccontextmanager
+from Authorization import security
 
 
 @asynccontextmanager
@@ -22,7 +22,8 @@ async def lifespan(app: FastAPI):
     yield
 
 
-router = APIRouter(prefix="/books", tags=["Books"])
+b_router = APIRouter(prefix="/books", tags=["Books"])
+c_router = APIRouter(prefix="/auth", tags=["Auth"])
 
 app = FastAPI(lifespan=lifespan)
 
@@ -44,44 +45,83 @@ async def unprocessable_entity_exception(req: Request, exc: RequestValidationErr
     )
 
 
-@router.post("/add_book", summary="Добавить книгу")
-async def add_book(data: BookModel, sess: SessionDep):
-    sess.add(BooksORM(title=data.title, rating=data.rating))
-    await sess.commit()
-    return {f"Книга : {data.title}": f"Добавлена"}
+@app.exception_handler(IntegrityError)
+async def unique_violation_error(req: Request, exc: IntegrityError):
+    return JSONResponse(
+        status_code=status.HTTP_409_CONFLICT,
+        content={"Ошибка": "Нарушение уникальности"},
+    )
 
 
-@router.get("", summary="Все книги")
+@b_router.post("/add_book", summary="Добавить книгу")
+async def add_book(data: BookModel, sess: SessionDep, request: Request):
+    token = request.cookies.get("access_auth")
+    if token:
+        sess.add(BooksORM(title=data.title, rating=data.rating))
+        return {f"Книга : {data.title}": f"Добавлена"}
+    raise HTTPException(
+        status_code=401, detail={"Статус": "Пользователь не авторизован"}
+    )
+
+
+@b_router.get("", summary="Все книги")
 async def all_books(sess: SessionDep):
     query = select(BooksORM)
     res = await sess.execute(query)
     res = res.scalars().all()
     if len(res) > 0:
         return res
-    raise HTTPException(status_code=404, detail="Books not found")
+    raise HTTPException(status_code=404, detail={"Статус": "Книга не найдена"})
 
 
-@router.get("/{book_id}", summary="Найти книгу")
+@b_router.get("/{book_id}", summary="Найти книгу")
 async def get_book(book_id: int, sess: SessionDep):
     book = await sess.get(BooksORM, book_id)
     if book:
         return book
-    raise HTTPException(status_code=404, detail="Книга не найдена")
+    raise HTTPException(status_code=404, detail={"Статус": "Книга не найдена"})
 
 
-@router.delete("/remove_book", summary="Удалить книгу")
-async def del_book(sess: SessionDep, book_id: int):
-    book = await sess.get(BooksORM, book_id)
-    print(book)
-    if book:
-        await sess.delete(book)
-        await sess.commit()
-        return {f"Книга ": "удалена"}
+@b_router.delete("/remove_book", summary="Удалить книгу")
+async def del_book(sess: SessionDep, book_id: int, request: Request):
+    token = request.cookies.get("access_auth")
+    if token:
+        book = await sess.get(BooksORM, book_id)
+        if book:
+            await sess.delete(book)
+            await sess.commit()
+            return {f"Книга ": "удалена"}
 
-    raise HTTPException(status_code=404, detail="Книга не найдена")
+        raise HTTPException(status_code=404, detail={"Статус": "Книга не найдена"})
+    raise HTTPException(
+        status_code=401, detail={"Статус": "Пользователь не авторизован"}
+    )
 
 
-app.include_router(router)
+@c_router.post("/registry", summary="registration")
+async def registry(sess: SessionDep, creds: CredModel):
+    sess.add(CredsORM(username=creds.username, password=creds.password))
+    return {"Регистрация": "успешна"}
+
+
+@c_router.post("/login", summary="login")
+async def login(sess: SessionDep, creds: CredModel):
+    query = select(CredsORM)
+    res = await sess.execute(query)
+    res = res.scalars().all()
+    for cred in res:
+        if cred.username == creds.username and cred.password == creds.password:
+            token = security.create_access_token(uid=str(cred.cred_id))
+            response = JSONResponse(content={"Статус": "Авторизация прошла успешно"})
+            security.set_access_cookies(token=token, response=response)
+            return response
+    raise HTTPException(
+        status_code=401, detail={"Ошибка авторизации": "Неверные логин или пароль"}
+    )
+
+
+app.include_router(b_router)
+app.include_router(c_router)
 
 if __name__ == "__main__":
     uvicorn.run("main:app", reload=True)
