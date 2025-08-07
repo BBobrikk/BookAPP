@@ -19,7 +19,13 @@ async def setup_test_db():
                     BooksORM(title="The Walking Dead", rating=4.5),
                 ]
             )
-            sess.add(CredsORM(username = "test", password = "test"))
+            sess.add_all(
+                [
+                    CredsORM(username="test1", password="test1"),
+                    CredsORM(username="test2", password="test2"),
+                ]
+            )
+            sess.commit()
 
     yield
 

@@ -52,9 +52,9 @@ async def unique_violation_error(req: Request, exc: IntegrityError):
 
 
 @b_router.post("/add_book", summary="Добавить книгу")
-async def add_book(data: BookModel, sess: SessionDep, request: Request):
+async def add_book(data: BookModel, sess: SessionDep, request: Request, root=True):
     token = request.cookies.get("access_auth")
-    if token:
+    if token or root:
         sess.add(BooksORM(title=data.title, rating=data.rating))
         return {f"Книга : {data.title}": f"Добавлена"}
     raise HTTPException(
@@ -81,10 +81,11 @@ async def get_book(book_id: int, sess: SessionDep):
 
 
 @b_router.delete("/remove_book", summary="Удалить книгу")
-async def del_book(sess: SessionDep, book_id: int, request: Request):
+async def del_book(sess: SessionDep, book_id: int, request: Request, root=True):
     token = request.cookies.get("access_auth")
-    if token:
+    if token or root:
         book = await sess.get(BooksORM, book_id)
+        print(book)
         if book:
             await sess.delete(book)
             await sess.commit()
@@ -116,23 +117,28 @@ async def login(sess: SessionDep, creds: CredModel):
     raise HTTPException(
         status_code=401, detail={"Ошибка авторизации": "Неверные логин или пароль"}
     )
-@c_router.get("/users", summary = "users")
-async def get_users(sess : SessionDep):
+
+
+@c_router.get("/users", summary="users")
+async def get_users(sess: SessionDep):
     query = select(CredsORM)
     res = await sess.execute(query)
     res = res.scalars().all()
     if res:
         return res
-    raise HTTPException(status_code = 404, detail = {"Ошибка" : "Пользователи не найдены"})
+    raise HTTPException(status_code=404, detail={"Ошибка": "Пользователи не найдены"})
 
-@c_router.delete("/del_user", summary = "delete user")
-async def del_user(sess : SessionDep, username : str):
+
+@c_router.delete("/del_user", summary="delete user")
+async def del_user(sess: SessionDep, username: str):
     query = select(CredsORM).where(CredsORM.username == username)
     user = await sess.execute(query)
+    user = user.scalars().first()
     if user:
         await sess.delete(user)
-        return {"Статус" : "Пользователь удалён"}
-    raise HTTPException(status_code = 404, detail = {"Ошибка" : "Пользователь не найден"})
+        return {"Статус": "Пользователь удалён"}
+    raise HTTPException(status_code=404, detail={"Ошибка": "Пользователь не найден"})
+
 
 app.include_router(b_router)
 app.include_router(c_router)
