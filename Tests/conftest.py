@@ -1,6 +1,6 @@
 from DataBase.Connection import Base, engine
 from DataBase.Connection import session
-from DataBase.TableModels import BooksORM
+from DataBase.TableModels import BooksORM, CredsORM
 import pytest
 
 
@@ -19,7 +19,7 @@ async def setup_test_db():
                     BooksORM(title="The Walking Dead", rating=4.5),
                 ]
             )
-            await sess.commit()
+            sess.add(CredsORM(username = "test", password = "test"))
 
     yield
 

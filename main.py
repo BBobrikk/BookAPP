@@ -1,5 +1,4 @@
 import time
-
 import uvicorn
 from fastapi import FastAPI, APIRouter, HTTPException, Request, status
 from fastapi.exceptions import RequestValidationError
@@ -117,7 +116,23 @@ async def login(sess: SessionDep, creds: CredModel):
     raise HTTPException(
         status_code=401, detail={"Ошибка авторизации": "Неверные логин или пароль"}
     )
+@c_router.get("/users", summary = "users")
+async def get_users(sess : SessionDep):
+    query = select(CredsORM)
+    res = await sess.execute(query)
+    res = res.scalars().all()
+    if res:
+        return res
+    raise HTTPException(status_code = 404, detail = {"Ошибка" : "Пользователи не найдены"})
 
+@c_router.delete("/del_user", summary = "delete user")
+async def del_user(sess : SessionDep, username : str):
+    query = select(CredsORM).where(CredsORM.username == username)
+    user = await sess.execute(query)
+    if user:
+        await sess.delete(user)
+        return {"Статус" : "Пользователь удалён"}
+    raise HTTPException(status_code = 404, detail = {"Ошибка" : "Пользователь не найден"})
 
 app.include_router(b_router)
 app.include_router(c_router)

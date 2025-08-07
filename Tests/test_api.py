@@ -1,5 +1,8 @@
 from httpx import AsyncClient, ASGITransport
+from sqlalchemy import select
+
 from BooksAPP.main import app
+from DataBase.TableModels import CredsORM
 
 
 class TestBooksApi:
@@ -42,3 +45,17 @@ class TestBooksApi:
             books = response.json()
             for book in books:
                 assert book["book_id"] != 1
+
+    async def test_registration(self):
+        async with AsyncClient(transport = ASGITransport(app = app), base_url = "http://test") as ac:
+            creds = {"password" : "test", "username" : "test"}
+            await ac.post("/auth/registry", json = creds)
+            response = await ac.get("/auth/users")
+            assert response.json()[0]["username"] == creds["username"] and response.status_code == 200
+
+    async def test_login(self):
+        async with AsyncClient(transport = ASGITransport(app = app), base_url = "http://test") as ac:
+            creds = {"username" : "test", "password" : "test"}
+            response = await ac.post("/auth/login", json = creds)
+            cookie = response.cookies.get("access_auth")
+            assert cookie is not None and response.status_code == 200
