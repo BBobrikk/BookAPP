@@ -10,6 +10,7 @@ from DataBase.TableModels import BooksORM, CredsORM
 from Tools import *
 from contextlib import asynccontextmanager
 from Authorization import security
+from redis import Redis
 
 
 @asynccontextmanager
@@ -24,6 +25,8 @@ b_router = APIRouter(prefix="/books", tags=["Books"])
 c_router = APIRouter(prefix="/auth", tags=["Auth"])
 
 app = FastAPI(lifespan=lifespan)
+
+client = Redis()
 
 
 @app.middleware("http")
@@ -74,10 +77,21 @@ async def all_books(sess: SessionDep):
 
 @b_router.get("/{book_id}", summary="Найти книгу")
 async def get_book(book_id: int, sess: SessionDep):
-    book = await sess.get(BooksORM, book_id)
-    if book:
-        return book
-    raise HTTPException(status_code=404, detail={"Статус": "Книга не найдена"})
+    redis_response = client.hgetall(f"book:{book_id}")
+    if redis_response == {}:
+        book = await sess.get(BooksORM, book_id)
+        if book:
+            cache = client.hset(
+                f"book:{book_id}",
+                mapping={
+                    "book_id": f"{book_id}",
+                    "title": f"{book.title}",
+                    "rating": f"{book.rating}",
+                },
+            )
+            return book
+        raise HTTPException(status_code=404, detail={"Статус": "Книга не найдена"})
+    return redis_response
 
 
 @b_router.delete("/remove_book", summary="Удалить книгу")
